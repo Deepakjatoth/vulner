@@ -1,0 +1,82 @@
+"""
+INTENTIONALLY VULNERABLE APPLICATION
+Use ONLY for learning, testing, or security practice.
+"""
+
+from flask import Flask, request, render_template_string
+import sqlite3
+import os
+
+app = Flask(__name__)
+
+# ❌ Vulnerability 1: Hardcoded secret key
+app.secret_key = "super-secret-key"
+
+# ❌ Vulnerability 2: Insecure database connection (no auth, no encryption)
+DB_NAME = "users.db"
+
+def get_db():
+    return sqlite3.connect(DB_NAME)
+
+# Initialize database
+def init_db():
+    if not os.path.exists(DB_NAME):
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "CREATE TABLE users (username TEXT, password TEXT)"
+        )
+        cursor.execute(
+            "INSERT INTO users VALUES ('admin', 'admin123')"
+        )
+        db.commit()
+        db.close()
+
+init_db()
+
+# ❌ Vulnerability 3: SQL Injection
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        db = get_db()
+        cursor = db.cursor()
+
+        # UNSAFE QUERY (SQL Injection)
+        query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+        cursor.execute(query)
+        user = cursor.fetchone()
+
+        if user:
+            return f"Welcome {username}"
+        else:
+            return "Invalid credentials"
+
+    return """
+    <h2>Login</h2>
+    <form method="POST">
+        Username: <input name="username"><br>
+        Password: <input name="password"><br>
+        <input type="submit">
+    </form>
+    """
+
+# ❌ Vulnerability 4: Reflected XSS
+@app.route("/search")
+def search():
+    q = request.args.get("q", "")
+    return render_template_string(
+        "<h1>Search results for: %s</h1>" % q
+    )
+
+# ❌ Vulnerability 5: Command Injection
+@app.route("/ping")
+def ping():
+    host = request.args.get("host", "")
+    return os.popen("ping -c 1 " + host).read()
+
+# ❌ Vulnerability 6: Debug mode enabled
+if __name__ == "__main__":
+    app.run(debug=True)
